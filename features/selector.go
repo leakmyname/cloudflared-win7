@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
-	"slices"
 	"sync"
 	"time"
 
@@ -105,11 +104,11 @@ func (fs *featureSelector) postQuantumMode() PostQuantumMode {
 
 func (fs *featureSelector) datagramVersion() DatagramVersion {
 	// If user provides the feature via the cli, we take it as priority over remote feature evaluation
-	if slices.Contains(fs.cliFeatures, FeatureDatagramV3_1) {
+	if contains(fs.cliFeatures, FeatureDatagramV3_1) {
 		return DatagramV3
 	}
 	// If the user specifies DatagramV2, we also take that over remote
-	if slices.Contains(fs.cliFeatures, FeatureDatagramV2) {
+	if contains(fs.cliFeatures, FeatureDatagramV2) {
 		return DatagramV2
 	}
 

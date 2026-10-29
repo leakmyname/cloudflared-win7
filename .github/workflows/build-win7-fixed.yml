@@ -21,8 +21,16 @@ jobs:
           go-version: '1.21.13'
           cache: false
 
+      - name: Patch Go runtime for Win7
+        run: bash patches/patch-go-runtime.sh "$(go env GOROOT)"
+
+      - name: Clear Go cache
+        run: go clean -cache
+
       - name: Build cloudflared (fixed version 2999.12.31)
         run: bash build-win7.sh 2999.12.31
+        env:
+          GOROOT: ${{ env.GOROOT }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

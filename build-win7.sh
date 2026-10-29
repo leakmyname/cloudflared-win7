@@ -6,14 +6,21 @@
 #   bash build-win7.sh              # auto-detect latest upstream version
 #   bash build-win7.sh 2999.12.31   # use a fixed version string
 #
-# The source tree must already contain the Go 1.21 compatibility patches:
+# Patches applied to the source tree:
 #   - go.mod:        go 1.22 -> 1.21, go.uber.org/mock v0.5.0 -> v0.4.0
 #   - selector.go:   slices.Concat (Go 1.22+) -> manual append
 #   - diagnostic.go: for range len(x) (Go 1.22+) -> classic for loop
+#
+# Go runtime patch (Windows 7 compatibility):
+#   Go 1.21 uses bcryptprimitives.dll!ProcessPrng for random data,
+#   which only exists on Windows 10+. This script patches the Go
+#   runtime to fall back to advapi32.dll!SystemFunction036 (RtlGenRandom)
+#   when ProcessPrng is unavailable (Windows 7).
 ###############################################################################
 set -euo pipefail
 
 GO_BIN="${GO_BIN:-go}"
+GO_ROOT_OVERRIDE="${GOROOT:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-.}"
 FIXED_VERSION="${1:-}"
 
@@ -39,7 +46,7 @@ else
     log "Latest upstream version: $VERSION"
 fi
 
-# ---------- verify patches ----------
+# ---------- verify source patches ----------
 log "Verifying source patches..."
 if grep -q '^go 1\.2[2-9]' go.mod 2>/dev/null; then
     err "go.mod still requires Go 1.22+ — patches not applied!"
@@ -49,7 +56,14 @@ if grep -q 'slices\.Concat' features/selector.go 2>/dev/null; then
     err "selector.go still uses slices.Concat — patch not applied!"
     exit 1
 fi
-log "  Patches OK"
+log "  Source patches OK"
+
+# ---------- patch Go runtime for Win7 ----------
+if [ -n "$GO_ROOT_OVERRIDE" ]; then
+    log "Patching Go runtime for Windows 7 ProcessPrng fallback..."
+    bash patches/patch-go-runtime.sh "$GO_ROOT_OVERRIDE" || true
+    "$GO_BIN" clean -cache 2>/dev/null || true
+fi
 
 # ---------- dependencies ----------
 log "Downloading dependencies..."

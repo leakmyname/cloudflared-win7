@@ -1,6 +1,5 @@
 package features
 
-import "slices"
 
 const (
 	FeatureSerializedHeaders = "serialized_headers"
@@ -67,7 +66,7 @@ func dedupAndRemoveFeatures(features []string) []string {
 	set := map[string]bool{}
 	for _, feature := range features {
 		// Remove deprecated features from the provided list
-		if slices.Contains(deprecatedFeatures, feature) {
+		if contains(deprecatedFeatures, feature) {
 			continue
 		}
 		set[feature] = true
@@ -81,4 +80,13 @@ func dedupAndRemoveFeatures(features []string) []string {
 		i++
 	}
 	return keys
+}
+
+func contains(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
