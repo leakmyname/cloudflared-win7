@@ -1,5 +1,65 @@
 # Cloudflare Tunnel client
 
+---
+
+## Windows 7 32-bit Build (This Fork)
+
+This fork builds `cloudflared` for **Windows 7 32-bit** using **Go 1.21.13** (the last Go release supporting Win7). The upstream cloudflared now requires Go 1.27+ and only targets Windows 10+.
+
+### What this fork changes
+
+1. **Source patches** (Go 1.21 compatibility, already applied in this repo):
+   - `go.mod`: `go 1.22` -> `go 1.21`, `go.uber.org/mock` v0.5.0 -> v0.4.0
+   - `features/selector.go`: `slices.Concat` (Go 1.22+) replaced with manual `append`
+   - `diagnostic/diagnostic.go`: `for range len(x)` (Go 1.22+) replaced with classic `for` loop
+   - `features/features.go` + `features/selector.go`: `slices.Contains` replaced with local helper (avoids `slices` stdlib dependency)
+
+2. **Go runtime patch** (`patches/patch-go-runtime.sh`):
+   - Go 1.21 uses `bcryptprimitives.dll!ProcessPrng` for random data, which only exists on Windows 10+
+   - On Windows 7 the function pointer is nil, causing a crash at `PC=0x0` in `runtime.asmstdcall`
+   - The patch adds a fallback to `advapi32.dll!SystemFunction036` (aka `RtlGenRandom`), same as Go 1.20
+   - **This does not weaken security**: `RtlGenRandom` is a cryptographically secure PRNG backed by the same OS entropy pool. Go 1.20 and all earlier versions used it on Windows. The fallback only activates on Win7; Win10+ still uses `ProcessPrng`
+
+3. **Version injection**: The version string is injected via `-ldflags -X 'main.Version=...'`. The actual codebase is cloudflared `2025.5.0` + cherry-pick of TUN-9171. The version string does not affect tunnel security -- it is a plain string with no signature verification by Cloudflare edge servers.
+
+### Build
+
+```bash
+# Auto-detect latest upstream version
+bash build-win7.sh
+
+# Fixed version (e.g. far-future to suppress auto-update prompts)
+bash build-win7.sh 2999.12.31
+```
+
+The script expects Go 1.21.13 on PATH (or set `GO_BIN=/path/to/go`). Set `GOROOT` to have the runtime patch applied automatically.
+
+### GitHub Actions
+
+Two workflows are included in `.github/workflows/`:
+- `build-win7-latest.yml` -- injects the latest upstream version, builds Win7 32-bit
+- `build-win7-fixed.yml` -- injects `2999.12.31`, builds Win7 32-bit
+
+Both patch the Go runtime in CI before building. Artifacts are uploaded automatically.
+
+### Security notes
+
+- **Codebase is 2025.5.0**: security fixes in later cloudflared releases are not included. This is the main risk, larger than the runtime patch.
+- **Go 1.21.13**: last release of the Go 1.21 branch, includes all 1.21 security fixes. Does not include Go 1.22+ fixes.
+- **Version `2999.12.31`**: suppresses auto-update prompts on Win7 (update server sees a "future" version). Does not affect tunnel encryption or authentication.
+- **`RtlGenRandom` fallback**: cryptographically equivalent to `ProcessPrng`. No entropy reduction, no weaker algorithm.
+
+### Base version info
+
+| Component | Version |
+|---|---|
+| cloudflared codebase | 2025.5.0 + cherry-pick e144eac2 (TUN-9171) |
+| Go toolchain | 1.21.13 (patched runtime) |
+| Target | `GOOS=windows GOARCH=386 CGO_ENABLED=0` (PE32 Intel 80386) |
+| Version string | injected via ldflags (latest or 2999.12.31) |
+
+---
+
 Contains the command-line client for Cloudflare Tunnel, a tunneling daemon that proxies traffic from the Cloudflare network to your origins.
 This daemon sits between Cloudflare network and your origin (e.g. a webserver). Cloudflare attracts client requests and sends them to you
 via this daemon, without requiring you to poke holes on your firewall --- your origin can remain as closed as possible.
